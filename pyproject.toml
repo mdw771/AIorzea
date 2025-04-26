@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "AIorzea"
+description = "AIorzea is an agentic AI that answers your FFXIV questions by querying XIVAPI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE.txt"}
+dependencies = [
+    "ag2[openai]",
+]
+dynamic = ["version"]
+
+[tool.setuptools_scm]
+
+[tool.setuptools.packages.find]
+where = ["src"]
