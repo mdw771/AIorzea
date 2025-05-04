@@ -1,5 +1,6 @@
 from typing import Optional, Any, Annotated
 import requests
+import time
 
 from aiorzea.tools.base import BaseTool
 
@@ -14,6 +15,8 @@ class APIQueryTool(BaseTool):
 
 class XIVAPIQueryTool(APIQueryTool):
 
+    name = "XIVAPIQueryTool"
+
     def __init__(self, api_key: Optional[str] = None, *args, **kwargs):
         self.sheets = []
         super().__init__(base_url="https://v2.xivapi.com", api_key=api_key)
@@ -27,24 +30,11 @@ class XIVAPIQueryTool(APIQueryTool):
         )
         self.sheets = list(map(lambda x: x["name"], response.json()["sheets"]))
 
-    def create_query_string(self, queries: list[list[str]]) -> list[str]:
-        if isinstance(queries, str):
-            raise TypeError("queries must be a list of lists of strings.")
-        if isinstance(queries[0], str):
-            queries = [queries]
-        res = ""
-        for i, q in enumerate(queries):
-            res += f"{q[0]}{q[1]}{q[2]}"
-            if i < len(queries) - 1:
-                res += " "
-        return res
-
-
     def __call__(
             self, 
             sheets: str, 
             fields: str, 
-            queries: list[list[str]]
+            queries: str
         ) -> Annotated[list[dict], "Results of the query"]:
         """
         Query the XIVAPI for the given sheets, fields, and queries.
@@ -53,8 +43,7 @@ class XIVAPIQueryTool(APIQueryTool):
         ----------
         sheets: str
             The sheets to query. It should be a comma-separated 
-            list of sheet names. Available sheets can be found in 
-            `self.sheets`. Common ones include:
+            list of sheet names. Common ones include:
             - `Item`: Game items.
             - `Achievement`: Achievements.
             - `Mount`: Mounts.
@@ -63,20 +52,20 @@ class XIVAPIQueryTool(APIQueryTool):
             The fields to return. It should be a comma-separated list 
             of field names. Available fields can be found in the API 
             documentation for each sheet.
-        queries: list[list[str]]
-            The queries to search for. Multiple queries are supported,
-            and each query should be a list containig 3 strings: the
-            field, the operator, and the value. For example, to give
-            multiple queries, you can do:
-            `[["ClassJob.Abbreciation", "=", "BRD"], ["ClassJobLevel", "=", "92"]]`.
-            Note that when the value is a string giving the name of an
-            item, action, etc., it is typically capitalized every word.
+        queries: str
+            The queries to search for. A query should follow the format
+            `[field][operator][value]`. For example:
+            `"Name=\"Clarent\""`.
+            Note that when the value is a string, it should be in quotes,
+            and it is typically capitalized every word.
         
         Returns
         -------
-        list[dict]
+        str
             The results of the query.
         """
+        t0 = time.time()
+
         # Build the search URL
         url = f"{self.base_url}/api/search"
         
@@ -84,7 +73,7 @@ class XIVAPIQueryTool(APIQueryTool):
         params = {
             'sheets': sheets,
             'fields': fields,
-            'query': self.create_query_string(queries),
+            'query': queries,
         }
         
         # Add API key if provided
@@ -95,4 +84,28 @@ class XIVAPIQueryTool(APIQueryTool):
         response = requests.get(url, params=params)
         response.raise_for_status()  # Raise exception for bad status codes
         
-        return response.json()["results"]
+        t1 = time.time()
+        if t1 - t0 < 1:
+            # Prevent rate limiting
+            time.sleep(1 - (t1 - t0))
+
+        return str(response.json()["results"])
+    
+    def query_item(self, query: str) -> str:
+        """Query the XIVAPI for an item.
+
+        Parameters
+        ----------
+        query: str
+            The queries to search for. A query should follow the format
+            `[field][operator][value]`. For example:
+            `"Name=\"Clarent\""`.
+            Note that when the value is a string, it should be in quotes,
+            and it is typically capitalized every word.
+        
+        Returns
+        -------
+        str
+            The results of the query.
+        """
+        return self(sheets="Item", fields="*", queries=query)
